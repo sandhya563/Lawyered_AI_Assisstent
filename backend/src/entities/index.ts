@@ -5,3 +5,4 @@ export { Beneficiary } from './beneficiary.entity';
 export { AssetAllocation } from './asset-allocation.entity';
 export { Witness } from './witness.entity';
 export { ConversationMessage } from './conversation-message.entity';
+export { LawyerReview } from './lawyer-review.entity';
