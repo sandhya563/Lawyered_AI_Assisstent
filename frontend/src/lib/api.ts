@@ -55,9 +55,11 @@ export const willApi = {
 // Chat API
 export const chatApi = {
   getMessages: (willId: string) => api.get(`/chat/${willId}/messages`),
-  startConversation: (willId: string) => api.post(`/chat/${willId}/start`),
-  sendMessage: (willId: string, message: string) =>
-    api.post(`/chat/${willId}/send`, { message }),
+  startConversation: (willId: string, mode: 'default' | 'hinglish' = 'default') =>
+    api.post(`/chat/${willId}/start`, { mode }),
+  sendMessage: (willId: string, message: string, mode: 'default' | 'hinglish' = 'default') =>
+    api.post(`/chat/${willId}/send`, { message, mode }),
+  sendToLawyer: (willId: string) => api.post(`/chat/${willId}/send-to-lawyer`),
 };
 
 // Document API

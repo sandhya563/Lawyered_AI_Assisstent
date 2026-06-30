@@ -112,6 +112,17 @@ CREATE TABLE conversation_messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE lawyer_reviews (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    will_id UUID NOT NULL REFERENCES wills(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    snapshot JSONB NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    reviewer_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX idx_wills_user_id ON wills(user_id);
 CREATE INDEX idx_wills_status ON wills(status);

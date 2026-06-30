@@ -2,10 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConversationMessage } from '../entities/conversation-message.entity';
+import { LawyerReview } from '../entities/lawyer-review.entity';
 import { Will, WillStatus } from '../entities/will.entity';
 import { WillService } from '../will/will.service';
 import { WillValidationService } from '../will/will-validation.service';
 import { AiService } from './ai.service';
+
+type ChatMode = 'default' | 'hinglish';
 
 @Injectable()
 export class ChatService {
@@ -14,6 +17,8 @@ export class ChatService {
     private readonly messageRepository: Repository<ConversationMessage>,
     @InjectRepository(Will)
     private readonly willRepository: Repository<Will>,
+    @InjectRepository(LawyerReview)
+    private readonly lawyerReviewRepository: Repository<LawyerReview>,
     private readonly willService: WillService,
     private readonly validationService: WillValidationService,
     private readonly aiService: AiService,
@@ -26,7 +31,12 @@ export class ChatService {
     });
   }
 
-  async sendMessage(willId: string, userId: string, userMessage: string) {
+  async sendMessage(
+    willId: string,
+    userId: string,
+    userMessage: string,
+    mode: ChatMode = 'default',
+  ) {
     // Get the will
     const will = await this.willService.getWillById(willId, userId);
 
@@ -65,6 +75,7 @@ export class ChatService {
       recentForAi,
       missingFields,
       currentState,
+      mode,
     );
 
     // Process extracted data and update will
@@ -111,7 +122,7 @@ export class ChatService {
     };
   }
 
-  async startConversation(willId: string): Promise<ConversationMessage> {
+  async startConversation(willId: string, mode: ChatMode = 'default'): Promise<ConversationMessage> {
     // Check if there's already a greeting
     const existing = await this.messageRepository.findOne({
       where: { willId, role: 'assistant' },
@@ -125,11 +136,60 @@ export class ChatService {
     const greeting = this.messageRepository.create({
       willId,
       role: 'assistant',
-      content:
-        "Hello! I'm here to help you create your will. It's a simple process — I'll ask you questions one at a time, and together we'll make sure everything is properly documented.\n\nLet's start with the basics. What is your full name, age, and where do you live?",
+      content: this.buildGreeting(mode),
     });
 
     return this.messageRepository.save(greeting);
+  }
+
+  async createLawyerSnapshot(willId: string, userId: string) {
+    const will = await this.willService.getWillById(willId, userId);
+    const messages = await this.messageRepository.find({
+      where: { willId },
+      order: { createdAt: 'ASC' },
+    });
+
+    const snapshot = {
+      will: this.buildWillState(will),
+      summary: will.conversationSummary || '',
+      missingFields: await this.validationService.getMissingFields(willId),
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+        extractedData: message.extractedData || null,
+        createdAt: message.createdAt,
+      })),
+    };
+
+    const review = this.lawyerReviewRepository.create({
+      willId,
+      userId,
+      snapshot,
+      status: 'pending',
+    });
+
+    const saved = await this.lawyerReviewRepository.save(review);
+
+    return {
+      id: saved.id,
+      status: saved.status,
+      message: 'Snapshot sent for lawyer review.',
+    };
+  }
+
+  private buildGreeting(mode: ChatMode): string {
+    if (mode === 'hinglish') {
+      return (
+        "Hello! Main aapki will banane mein madad karne ke liye hoon. " +
+        "Yeh process simple hai — main aapse ek-ek sawal karunga, aur hum saath mein sab kuch sahi se document karenge.\n\n" +
+        "Sabse pehle, bataiye aapka full name kya hai, aapki umr kitni hai, aur aap kis address par rehte hain?"
+      );
+    }
+
+    return (
+      "Hello! I'm here to help you create your will. It's a simple process — I'll ask you questions one at a time, and together we'll make sure everything is properly documented.\n\n" +
+      "Let's start with the basics. What is your full name, age, and where do you live?"
+    );
   }
 
   /**

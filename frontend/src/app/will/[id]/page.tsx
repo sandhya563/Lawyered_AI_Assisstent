@@ -46,10 +46,13 @@ export default function WillBuilderPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [typing, setTyping] = useState(false)
+  const [chatMode, setChatMode] = useState<'default' | 'hinglish'>('default')
   const [willData, setWillData] = useState<WillData | null>(null)
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [downloading, setDownloading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     hydrate()
@@ -62,7 +65,12 @@ export default function WillBuilderPage() {
     }
     initializeChat()
     loadPreview()
-  }, [token, willId])
+    return () => {
+      if (typingRef.current) {
+        window.clearTimeout(typingRef.current)
+      }
+    }
+  }, [token, willId, chatMode])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -71,7 +79,7 @@ export default function WillBuilderPage() {
   const initializeChat = async () => {
     try {
       // Start conversation if needed
-      await chatApi.startConversation(willId)
+      await chatApi.startConversation(willId, chatMode)
       // Load all messages
       const { data } = await chatApi.getMessages(willId)
       setMessages(data)
@@ -107,18 +115,24 @@ export default function WillBuilderPage() {
     setMessages((prev) => [...prev, tempMsg])
 
     try {
-      const { data } = await chatApi.sendMessage(willId, userMessage)
+      const { data } = await chatApi.sendMessage(willId, userMessage, chatMode)
 
-      // Add AI response
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        content: data.message,
-        createdAt: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, aiMsg])
+      // Add typed AI response placeholder
+      const assistantId = `ai-${Date.now()}`
+      setTyping(true)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          createdAt: new Date().toISOString(),
+        },
+      ])
 
-      // Update preview
+      typeAssistantResponse(assistantId, data.message)
+
+      // Update preview and validation after the response finishes
       if (data.will) {
         await loadPreview()
       }
@@ -130,6 +144,7 @@ export default function WillBuilderPage() {
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== tempMsg.id))
       setInput(userMessage)
+      setTyping(false)
     } finally {
       setSending(false)
     }
@@ -140,6 +155,31 @@ export default function WillBuilderPage() {
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  const typeAssistantResponse = (messageId: string, content: string) => {
+    const words = content.split(' ')
+    let index = 0
+
+    const next = () => {
+      index += 1
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? { ...message, content: words.slice(0, index).join(' ') }
+            : message,
+        ),
+      )
+
+      if (index < words.length) {
+        typingRef.current = window.setTimeout(next, 45)
+      } else {
+        setTyping(false)
+        typingRef.current = null
+      }
+    }
+
+    next()
   }
 
   const handleDownload = async () => {
@@ -207,6 +247,37 @@ export default function WillBuilderPage() {
         </div>
       </header>
 
+      <div className="px-4 py-3 bg-white border-b border-gray-200 flex items-center gap-3">
+        <span className="text-sm font-medium text-gray-700">Interview mode:</span>
+        <button
+          onClick={() => setChatMode('default')}
+          className={`rounded-full border px-3 py-1 text-sm ${chatMode === 'default' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-300'}`}
+        >
+          English
+        </button>
+        <button
+          onClick={() => setChatMode('hinglish')}
+          className={`rounded-full border px-3 py-1 text-sm ${chatMode === 'hinglish' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-300'}`}
+        >
+          Hinglish
+        </button>
+        <div className="ml-auto">
+          <button
+            onClick={async () => {
+              try {
+                const { data } = await chatApi.sendToLawyer(willId)
+                toast.success(data.message)
+              } catch (error: any) {
+                toast.error('Unable to send snapshot to lawyer')
+              }
+            }}
+            className="btn-secondary text-sm px-3 py-1"
+          >
+            Send to Lawyer
+          </button>
+        </div>
+      </div>
+
       {/* Main content: chat left, preview right */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Chat panel */}
@@ -229,7 +300,7 @@ export default function WillBuilderPage() {
                 </div>
               </div>
             ))}
-            {sending && (
+            {sending && !typing && (
               <div className="flex justify-start">
                 <div className="bg-gray-100 rounded-2xl px-4 py-3">
                   <div className="flex items-center gap-1">
@@ -237,6 +308,13 @@ export default function WillBuilderPage() {
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
+                </div>
+              </div>
+            )}
+            {typing && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-2xl px-4 py-3">
+                  <div className="text-sm text-gray-600">Typing...</div>
                 </div>
               </div>
             )}

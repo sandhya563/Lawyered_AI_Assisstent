@@ -36,8 +36,9 @@ export class AiService {
     recentMessages: { role: string; content: string }[],
     missingFields: string[],
     currentWillState: Record<string, any>,
+    mode: 'default' | 'hinglish' = 'default',
   ): Promise<AiResponse> {
-    const systemPrompt = this.buildSystemPrompt(conversationSummary, missingFields, currentWillState);
+    const systemPrompt = this.buildSystemPrompt(conversationSummary, missingFields, currentWillState, mode);
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
@@ -106,8 +107,15 @@ New extracted data: ${extractedData ? JSON.stringify(extractedData) : 'None'}`,
     conversationSummary: string,
     missingFields: string[],
     currentWillState: Record<string, any>,
+    mode: 'default' | 'hinglish' = 'default',
   ): string {
+    const styleInstruction =
+      mode === 'hinglish'
+        ? 'When you reply, use a friendly mixture of Hindi and English. Keep the tone warm and conversational, but keep the instructions clear.'
+        : 'When you reply, use clear and friendly English.';
+
     return `You are a friendly, professional AI will-making assistant. You help people create their legal will by asking simple questions one at a time.
+${styleInstruction}
 
 ## YOUR RULES:
 1. Ask ONE question at a time in simple, warm language.

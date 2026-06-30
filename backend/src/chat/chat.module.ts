@@ -9,6 +9,7 @@ import { Asset } from '../entities/asset.entity';
 import { Beneficiary } from '../entities/beneficiary.entity';
 import { AssetAllocation } from '../entities/asset-allocation.entity';
 import { Witness } from '../entities/witness.entity';
+import { LawyerReview } from '../entities/lawyer-review.entity';
 import { WillModule } from '../will/will.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -21,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
       Beneficiary,
       AssetAllocation,
       Witness,
+      LawyerReview,
     ]),
     WillModule,
     AuthModule,
